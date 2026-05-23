@@ -5,8 +5,15 @@ import authRoutes from './routes/auth.routes.js';
 import passport from 'passport';
 import {Strategy as GoogleStrategy} from 'passport-google-oauth20';
 import config from './config/config.js';
+import cors from 'cors';
+
 
 const app = express();
+
+app.use(cors({
+  origin: 'http://localhost:5173', // Allow requests from this origin (your frontend)
+  credentials: true, // Allow cookies to be sent with requests
+}));
 
 // Middleware setup
 app.use(morgan('dev'));

@@ -37,6 +37,7 @@ export async function register(req, res) {
             firstName,
             lastName,
         },
+        role: req.body.role || 'user',
     });
 
     // Generate JWT Token
@@ -67,6 +68,57 @@ export async function register(req, res) {
     res.status(201).json({
         message: "User Created Successfully",
 
+        user: {
+            id: user._id,
+            email: user.email,
+            fullName: user.fullName,
+            role: user.role,
+        },
+    });
+}
+
+// Login a user with email/password
+export async function login(req, res) {
+    const { email, password } = req.body;
+
+    const user = await userModel.findOne({ email });
+    if (!user) {
+        return res.status(400).json({
+            message: "Invalid credentials",
+        });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+        return res.status(400).json({
+            message: "Invalid credentials",
+        });
+    }
+
+    const token = jwt.sign(
+        {
+            id: user._id,
+            role: user.role,
+        },
+        config.JWT_SECRET,
+        { expiresIn: "2d" },
+    );
+
+    res.cookie("token", token);
+
+    try {
+        await publishToQueue("user_logged_in", {
+            id: user._id,
+            email: user.email,
+            fullName: user.fullName,
+            role: user.role,
+        });
+    } catch (error) {
+        console.error("Failed to publish login event:", error);
+    }
+
+    res.status(200).json({
+        message: "User Logged in Successfully",
         user: {
             id: user._id,
             email: user.email,
@@ -117,19 +169,8 @@ export async function googleOAuthCallback(req, res) {
             console.error("Failed to publish login event:", error);
         }
 
-        // Send the response to the client with user details 
-
-        return res.status(200).json({
-            message: "User Logged in Successfully",
-            user: {
-                id: isUserAlreadyExist._id,
-                email: isUserAlreadyExist.email,
-                fullName: isUserAlreadyExist.fullName,
-            },
-
-            
-        });
-
+        // Redirect to the frontend homepage
+        return res.redirect(`${config.FRONTEND_URL}/home`);
 
     }
 
@@ -169,16 +210,7 @@ export async function googleOAuthCallback(req, res) {
 
     res.cookie("token", token);
 
-    // Send the response to the client with user details
-
-    res.status(201).json({
-        message: "User Created Successfully",
-        user: {
-            id: newUser._id,
-            email: newUser.email,
-            fullName: newUser.fullName,
-            role: newUser.role,
-        },
-    })
+    // Redirect to the frontend homepage
+    res.redirect(`${config.FRONTEND_URL}/home`);
 
 }
