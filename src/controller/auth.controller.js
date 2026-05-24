@@ -10,7 +10,7 @@ export async function register(req, res) {
     const {
         email,
         password,
-        fullName: { firstName, lastName },
+        fullName: { firstName, lastName },role="user"
     } = req.body;
 
     // Check if user already exists
@@ -45,6 +45,7 @@ export async function register(req, res) {
     const token = jwt.sign(
         {
             id: user._id,
+            fullName: user.fullName,
             role: user.role,
         },
         config.JWT_SECRET,
@@ -98,6 +99,7 @@ export async function login(req, res) {
     const token = jwt.sign(
         {
             id: user._id,
+            fullName: user.fullName,
             role: user.role,
         },
         config.JWT_SECRET,
@@ -150,6 +152,7 @@ export async function googleOAuthCallback(req, res) {
         const token = jwt.sign(
             {
                 id: isUserAlreadyExist._id,
+                fullName: isUserAlreadyExist.fullName,
                 role: isUserAlreadyExist.role,
             },
               config.JWT_SECRET,
@@ -203,6 +206,7 @@ export async function googleOAuthCallback(req, res) {
 
     const token = jwt.sign({
         id: newUser._id,
+        fullName: newUser.fullName,
         role: newUser.role,  
     },config.JWT_SECRET, {expiresIn: "2d"});
 
