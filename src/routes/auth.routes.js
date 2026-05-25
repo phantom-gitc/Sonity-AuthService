@@ -3,19 +3,49 @@ import * as authController from '../controller/auth.controller.js';
 import * as validationRule from '../middlewares/validation.middlewares.js';
 import passport from 'passport';
 import config from '../config/config.js';
+import { verifyToken } from '../middlewares/auth.middlewares.js';
+import multer from 'multer';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedImageMimes = ["image/jpeg", "image/png", "image/webp"];
+    if (allowedImageMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type for profileImage. Allowed types: JPEG, PNG, WebP"));
+    }
+  },
+});
 
 
 const router = express.Router();
 
 // @route   POST /api/auth/register
-
 router.post('/register', validationRule.registerUserValidationRules, authController.register);
 
 // @route   POST /api/auth/login
 router.post('/login', validationRule.loginUserValidationRules, authController.login);
 
-// Route to initiate Google OAuth flow
+// @route   POST /api/auth/logout
+router.post('/logout', authController.logout);
 
+// @route   POST /api/auth/forgot-password
+router.post('/forgot-password', authController.forgotPassword);
+
+// @route   POST /api/auth/reset-password/:token
+router.post('/reset-password/:token', authController.resetPassword);
+
+// @route   GET /api/auth/me (Get profile)
+router.get('/me', verifyToken, authController.getProfile);
+
+// @route   PUT /api/auth/profile (Update profile)
+router.put('/profile', verifyToken, upload.single('profileImage'), authController.updateProfile);
+
+// Route to initiate Google OAuth flow
 router.get('/google',
     passport.authenticate('google', { scope: ['profile', 'email'] })
 );

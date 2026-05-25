@@ -27,8 +27,24 @@ const userSchema = new mongoose.Schema({
   },
   role:{
     type:String,
-    enum:["user","artist"],
-    default:"user"
+    enum:["listener","creator","user","artist","admin"],
+    default:"listener"
+  },
+  resetPasswordToken: {
+    type: String,
+    default: null
+  },
+  resetPasswordExpires: {
+    type: Date,
+    default: null
+  },
+  profileImage: {
+    type: String,
+    default: null
+  },
+  profileImagePublicId: {
+    type: String,
+    default: null
   }
 },{timestamps :true});
 

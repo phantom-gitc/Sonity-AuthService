@@ -14,6 +14,9 @@ const _config = {
   GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/api/auth/google/callback',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   RABITMQ_URI: process.env.RABITMQ_URI,
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
 };
 
 export default _config;
