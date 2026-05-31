@@ -1,10 +1,10 @@
 import userModel from "../models/user.model.js";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import config from "../config/config.js";
 import { publishToQueue } from "../broker/rabbit.js";
 import crypto from "crypto";
 import { uploadProfileImage, deleteFromCloudinary } from "../services/cloudinary.services.js";
+import { clearAuthCookie, createAuthToken, hashToken, setAuthCookie } from "../utils/auth.utils.js";
 
 // Register a new User
 
@@ -52,15 +52,7 @@ export async function register(req, res) {
 
     // Generate JWT Token
 
-    const token = jwt.sign(
-        {
-            id: user._id,
-            fullName: user.fullName,
-            role: user.role,
-        },
-        config.JWT_SECRET,
-        { expiresIn: "2d" },
-    );
+    const token = createAuthToken(user);
 
     // Publish the user creation event to RabbitMQ.
 
@@ -72,7 +64,7 @@ export async function register(req, res) {
     });
 
     // set the token in the cookie
-    res.cookie("token", token);
+    setAuthCookie(res, token);
 
     // Send the response
 
@@ -106,17 +98,9 @@ export async function login(req, res) {
         });
     }
 
-    const token = jwt.sign(
-        {
-            id: user._id,
-            fullName: user.fullName,
-            role: user.role,
-        },
-        config.JWT_SECRET,
-        { expiresIn: "2d" },
-    );
+    const token = createAuthToken(user);
 
-    res.cookie("token", token);
+    setAuthCookie(res, token);
 
     try {
         await publishToQueue("user_logged_in", {
@@ -159,17 +143,9 @@ export async function googleOAuthCallback(req, res) {
 
         // Generate JWT Token
 
-        const token = jwt.sign(
-            {
-                id: isUserAlreadyExist._id,
-                fullName: isUserAlreadyExist.fullName,
-                role: isUserAlreadyExist.role,
-            },
-              config.JWT_SECRET,
-            { expiresIn: "2d" },
-        );
+        const token = createAuthToken(isUserAlreadyExist);
         // set the token in the cookie
-        res.cookie("token", token);
+        setAuthCookie(res, token);
 
         try {
             await publishToQueue("user_logged_in", {
@@ -214,15 +190,11 @@ export async function googleOAuthCallback(req, res) {
 
     // Generate JWT Token
 
-    const token = jwt.sign({
-        id: newUser._id,
-        fullName: newUser.fullName,
-        role: newUser.role,  
-    },config.JWT_SECRET, {expiresIn: "2d"});
+    const token = createAuthToken(newUser);
 
     // set the token in the cookie
 
-    res.cookie("token", token);
+    setAuthCookie(res, token);
 
     // Redirect to the frontend homepage
     res.redirect(`${config.FRONTEND_URL}/home`);
@@ -231,7 +203,7 @@ export async function googleOAuthCallback(req, res) {
 
 // Logout a user
 export async function logout(req, res) {
-    res.clearCookie("token");
+    clearAuthCookie(res);
     return res.status(200).json({
         success: true,
         message: "Logged out successfully",
@@ -254,8 +226,8 @@ export async function forgotPassword(req, res) {
             });
         }
 
-        const token = crypto.randomBytes(20).toString("hex");
-        user.resetPasswordToken = token;
+        const token = crypto.randomBytes(32).toString("hex");
+        user.resetPasswordToken = hashToken(token);
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hour expiry
         await user.save();
 
@@ -290,7 +262,7 @@ export async function resetPassword(req, res) {
         }
 
         const user = await userModel.findOne({
-            resetPasswordToken: token,
+            resetPasswordToken: hashToken(token),
             resetPasswordExpires: { $gt: Date.now() },
         });
 

@@ -6,10 +6,11 @@ let channel, connection;
 // Here we are creating a connection to RabbitMQ.
 export async function connectRabbitMQ() {
   try {
-    const rabbitHost = config.RABITMQ_URI ? config.RABITMQ_URI.split('@')[1] || config.RABITMQ_URI : 'unknown';
+    const rabbitUri = config.RABBITMQ_URI || config.RABITMQ_URI;
+    const rabbitHost = rabbitUri ? rabbitUri.split('@')[1] || rabbitUri : 'unknown';
     console.log(`Connecting to RabbitMQ at: ${rabbitHost.split('/')[0]}`);
     
-    connection = await amqp.connect(config.RABITMQ_URI);
+    connection = await amqp.connect(rabbitUri);
     channel = await connection.createChannel();
     console.log('Connected to RabbitMQ 🐰');
   } catch (error) {
@@ -17,6 +18,11 @@ export async function connectRabbitMQ() {
     connection = null;
     channel = null;
   }
+}
+
+export async function closeRabbitMQ() {
+  if (channel) await channel.close();
+  if (connection) await connection.close();
 }
 
 // This function is used to publish messages to a specific queue in RabbitMQ.
@@ -32,4 +38,4 @@ export async function publishToQueue(queueName, data) {
   } catch (err) {
     console.error(`❌ Failed to publish message to queue ${queueName}:`, err.message);
   }
-}
+}

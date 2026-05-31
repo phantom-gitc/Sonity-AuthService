@@ -5,6 +5,7 @@ import passport from 'passport';
 import config from '../config/config.js';
 import { verifyToken } from '../middlewares/auth.middlewares.js';
 import multer from 'multer';
+import { isValidImageBuffer } from '../utils/file-validation.utils.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -23,6 +24,13 @@ const upload = multer({
 
 
 const router = express.Router();
+
+function validateProfileImageContent(req, res, next) {
+  if (req.file && !isValidImageBuffer(req.file)) {
+    return res.status(400).json({ success: false, message: 'Invalid profile image content' });
+  }
+  next();
+}
 
 // @route   POST /api/auth/register
 router.post('/register', validationRule.registerUserValidationRules, authController.register);
@@ -43,7 +51,7 @@ router.post('/reset-password/:token', authController.resetPassword);
 router.get('/me', verifyToken, authController.getProfile);
 
 // @route   PUT /api/auth/profile (Update profile)
-router.put('/profile', verifyToken, upload.single('profileImage'), authController.updateProfile);
+router.put('/profile', verifyToken, upload.single('profileImage'), validateProfileImageContent, authController.updateProfile);
 
 // Route to initiate Google OAuth flow
 router.get('/google',

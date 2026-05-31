@@ -6,6 +6,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
+    lowercase: true,
+    trim: true,
   },
   fullName: {
     firstName: {
@@ -24,6 +26,7 @@ const userSchema = new mongoose.Schema({
   },
   googleId: {
     type: String,
+    index: true,
   },
   role:{
     type:String,
@@ -48,6 +51,7 @@ const userSchema = new mongoose.Schema({
   }
 },{timestamps :true});
 
+userSchema.index({ resetPasswordToken: 1, resetPasswordExpires: 1 });
 
 const userModel = mongoose.model('user',userSchema);
 
