@@ -16,6 +16,8 @@ export async function register(req, res) {
         role = "listener"
     } = req.body;
 
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+
     // Normalize roles (case-insensitive)
     const rawRole = String(role || "").toLowerCase().trim();
     if (rawRole === "artist" || rawRole === "creator") {
@@ -26,7 +28,7 @@ export async function register(req, res) {
 
     // Check if user already exists
 
-    const isUserAlreadyExist = await userModel.findOne({ email });
+    const isUserAlreadyExist = await userModel.findOne({ email: normalizedEmail });
 
     if (isUserAlreadyExist) {
         return res.status(400).json({
@@ -42,7 +44,7 @@ export async function register(req, res) {
     // Create a new user in the database
 
     const user = await userModel.create({
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         fullName: {
             firstName,
@@ -84,8 +86,9 @@ export async function register(req, res) {
 // Login a user with email/password
 export async function login(req, res) {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || '').toLowerCase().trim();
 
-    const user = await userModel.findOne({ email });
+    const user = await userModel.findOne({ email: normalizedEmail });
     if (!user) {
         return res.status(400).json({
             message: "Invalid credentials",
@@ -217,8 +220,10 @@ export async function forgotPassword(req, res) {
             return res.status(400).json({ success: false, message: "Email is required" });
         }
 
-        const user = await userModel.findOne({ email });
+        const normalizedEmail = String(email).toLowerCase().trim();
+        const user = await userModel.findOne({ email: normalizedEmail });
         if (!user) {
+            console.warn(`Forgot password requested for unregistered email: ${normalizedEmail}`);
             return res.status(200).json({
                 success: true,
                 message: "If that email exists in our database, we have sent a reset link.",
