@@ -11,18 +11,38 @@ export async function connectRabbitMQ() {
     console.log(`Connecting to RabbitMQ at: ${rabbitHost.split('/')[0]}`);
     
     connection = await amqp.connect(rabbitUri);
+
+    connection.on('error', (err) => {
+      console.warn('⚠️ RabbitMQ connection error:', err.message);
+      connection = null;
+      channel = null;
+      setTimeout(connectRabbitMQ, 5000);
+    });
+
+    connection.on('close', () => {
+      console.warn('⚠️ RabbitMQ connection dropped. Reconnecting in 5s...');
+      connection = null;
+      channel = null;
+      setTimeout(connectRabbitMQ, 5000);
+    });
+
     channel = await connection.createChannel();
     console.log('Connected to RabbitMQ 🐰');
   } catch (error) {
-    console.warn(`⚠️ Failed to connect to RabbitMQ: ${error.message}. Running in offline mode without message broker.`);
+    console.warn(`⚠️ Failed to connect to RabbitMQ: ${error.message}. Retrying in 5s...`);
     connection = null;
     channel = null;
+    setTimeout(connectRabbitMQ, 5000);
   }
 }
 
 export async function closeRabbitMQ() {
-  if (channel) await channel.close();
-  if (connection) await connection.close();
+  try {
+    if (channel) await channel.close();
+    if (connection) await connection.close();
+  } catch (err) {
+    // Ignore shutdown errors
+  }
 }
 
 // This function is used to publish messages to a specific queue in RabbitMQ.

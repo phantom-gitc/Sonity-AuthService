@@ -22,7 +22,6 @@ const upload = multer({
   },
 });
 
-
 const router = express.Router();
 
 function validateProfileImageContent(req, res, next) {
@@ -53,18 +52,23 @@ router.get('/me', verifyToken, authController.getProfile);
 // @route   PUT /api/auth/profile (Update profile)
 router.put('/profile', verifyToken, upload.single('profileImage'), validateProfileImageContent, authController.updateProfile);
 
-// Route to initiate Google OAuth flow
-router.get('/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+// @route   PATCH /api/auth/role (Upgrade user role)
+router.patch('/role', verifyToken, authController.upgradeRole);
 
+// Route to initiate Google OAuth flow (prompt: 'select_account' forces Google account picker modal)
+router.get('/google', (req, res, next) => {
+  const role = req.query.role || 'listener';
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',
+    state: JSON.stringify({ role }),
+  })(req, res, next);
+});
 
 // Callback route that Google will redirect to after authentication
-
 router.get('/google/callback',
-    passport.authenticate('google', { session: false, failureRedirect: '/api/auth/google/failure' }),
-    authController.googleOAuthCallback
-  
+  passport.authenticate('google', { session: false, failureRedirect: '/api/auth/google/failure' }),
+  authController.googleOAuthCallback
 );
 
 router.get('/google/failure', (req, res) => {

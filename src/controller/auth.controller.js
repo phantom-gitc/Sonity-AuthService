@@ -16,8 +16,9 @@ export async function register(req, res) {
         role = "listener"
     } = req.body;
 
-    // Normalize roles
-    if (role === "artist" || role === "creator") {
+    // Normalize roles (case-insensitive)
+    const rawRole = String(role || "").toLowerCase().trim();
+    if (rawRole === "artist" || rawRole === "creator") {
         role = "creator";
     } else {
         role = "listener";
@@ -127,24 +128,31 @@ export async function login(req, res) {
 //Google OAuth callback handler
 
 export async function googleOAuthCallback(req, res) {
-    
     const user = req.user;
+
+    // Check for role passed via OAuth state parameter
+    let desiredRole = "listener";
+    if (req.query.state) {
+        try {
+            const parsed = typeof req.query.state === "string" ? JSON.parse(req.query.state) : req.query.state;
+            if (parsed.role === "creator" || parsed.role === "artist") {
+                desiredRole = "creator";
+            }
+        } catch (e) {
+            console.log("Could not parse state role:", e);
+        }
+    }
 
     const isUserAlreadyExist = await userModel.findOne({
         $or: [
-        { email: user.emails[0].value }, 
-        { googleId: user.id }
-    ],
+            { email: user.emails[0].value }, 
+            { googleId: user.id }
+        ],
     });
 
     // If user already exists, log them in
-    
     if (isUserAlreadyExist) {
-
-        // Generate JWT Token
-
         const token = createAuthToken(isUserAlreadyExist);
-        // set the token in the cookie
         setAuthCookie(res, token);
 
         try {
@@ -158,13 +166,11 @@ export async function googleOAuthCallback(req, res) {
             console.error("Failed to publish login event:", error);
         }
 
-        // Redirect to the frontend homepage
-        return res.redirect(`${config.FRONTEND_URL}/home`);
-
+        const isCreator = isUserAlreadyExist.role === "creator" || isUserAlreadyExist.role === "artist";
+        return res.redirect(`${config.FRONTEND_URL}${isCreator ? "/creator" : "/home"}`);
     }
 
     // If user does not exist, create a new user
-
     const displayName = user.displayName || '';
     const nameParts = displayName.trim().split(' ').filter(Boolean);
     const firstName = user.name?.givenName || nameParts[0] || 'User';
@@ -176,29 +182,22 @@ export async function googleOAuthCallback(req, res) {
             firstName,
             lastName,
         },
-        googleId: user.id, // Store the Google ID for future reference
-    })
+        googleId: user.id,
+        role: desiredRole,
+    });
 
-        // Publish the user creation event to RabbitMQ.
-
-        await publishToQueue("user_created", {
+    await publishToQueue("user_created", {
         id: newUser._id,
         email: newUser.email,
         fullName: newUser.fullName,
         role: newUser.role,
     });
 
-    // Generate JWT Token
-
     const token = createAuthToken(newUser);
-
-    // set the token in the cookie
-
     setAuthCookie(res, token);
 
-    // Redirect to the frontend homepage
-    res.redirect(`${config.FRONTEND_URL}/home`);
-
+    const isNewCreator = newUser.role === "creator" || newUser.role === "artist";
+    res.redirect(`${config.FRONTEND_URL}${isNewCreator ? "/creator" : "/home"}`);
 }
 
 // Logout a user
@@ -358,6 +357,30 @@ export async function updateProfile(req, res) {
 
         await user.save();
 
+        // Publish user_updated event to RabbitMQ
+        try {
+            await publishToQueue("user_updated", {
+                id: user._id,
+                email: user.email,
+                fullName: user.fullName,
+                role: user.role,
+                profileImage: user.profileImage,
+            });
+        } catch (queueErr) {
+            console.error("Failed to publish user_updated event:", queueErr);
+        }
+
+        // Sync new artist name to all uploaded tracks
+        if (firstName || lastName) {
+            try {
+                const newArtistName = `${user.fullName.firstName} ${user.fullName.lastName || ""}`.trim();
+                const MusicModel = mongoose.model("Music", new mongoose.Schema({}, { strict: false, collection: "musics" }));
+                await MusicModel.updateMany({ artistId: user._id }, { artist: newArtistName });
+            } catch (syncErr) {
+                console.error("Failed to sync artist name to musics collection:", syncErr);
+            }
+        }
+
         return res.status(200).json({
             success: true,
             message: "Profile updated successfully",
@@ -367,6 +390,49 @@ export async function updateProfile(req, res) {
                 fullName: user.fullName,
                 role: user.role,
                 profileImage: user.profileImage,
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+
+
+// Upgrade user role (listener → creator)
+export async function upgradeRole(req, res) {
+    try {
+        const { role } = req.body;
+
+        // Only allow upgrading to creator/artist
+        if (role !== "creator" && role !== "artist") {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid role. You can only upgrade to 'creator'.",
+            });
+        }
+
+        const user = await userModel.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        // Set normalized role
+        user.role = "creator";
+        await user.save();
+
+        // Issue a new token with updated role
+        const token = createAuthToken(user);
+        setAuthCookie(res, token);
+
+        return res.status(200).json({
+            success: true,
+            message: "Role upgraded to creator successfully",
+            user: {
+                id: user._id,
+                email: user.email,
+                fullName: user.fullName,
+                role: user.role,
             },
         });
     } catch (error) {
